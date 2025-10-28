@@ -1,7 +1,16 @@
-__pycache__/
-*.pyc
+# Ignorar o ambiente virtual
 venv/
-.env
-.DS_Store
+__pycache__/
+
+# Ignorar arquivos temporários
+*.pyc
+*.pyo
 *.log
-*.sqlite3
+*.tmp
+
+# Ignorar arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar cache do Streamlit
+.streamlit/
