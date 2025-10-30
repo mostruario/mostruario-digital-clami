@@ -79,7 +79,7 @@ st.sidebar.header("Filtros")
 codigos = ["Todos"] + sorted(df["codigo"].dropna().unique().tolist())
 codigo_sel = st.sidebar.selectbox("Código (fornecedor)", codigos)
 
-# --- Faixa (agora dependente do fornecedor) ---
+# --- Faixa (dependente do fornecedor) ---
 if codigo_sel and codigo_sel != "Todos":
     faixas_filtradas = sorted(df.loc[df["codigo"] == codigo_sel, "faixa"].dropna().unique().tolist())
 else:
@@ -156,12 +156,10 @@ else:
     grouped = filtered.sort_values(["faixa", "referencia"]).groupby("faixa", sort=False)
     first = True
     for faixa, group in grouped:
-        # linha divisória (exceto antes da primeira faixa)
         if not first:
             st.markdown("<hr style='border:1px solid #ccc; margin:40px 0;'>", unsafe_allow_html=True)
         first = False
 
-        # título da faixa (sem a palavra "Faixa")
         st.markdown(f"<h3 style='margin-top:10px; color:#0b3d91;'>{faixa}</h3>", unsafe_allow_html=True)
 
         imgs_per_row = 5
@@ -172,15 +170,16 @@ else:
             with col:
                 img_url = row.get("imagem_url", "")
                 if img_url:
-
-# Caminho da imagem hospedada no GitHub
-img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url}"
-
-try:
-    st.image(img_github, use_container_width=True)
-except Exception:
-    ref = str(row.get("referencia", "")).replace(" ", "+")
-    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
+                    img_full_path = os.path.join(BASE_DIR, img_url.replace("/", os.sep))
+                    if os.path.exists(img_full_path):
+                        st.image(img_full_path, use_container_width=True)
+                    else:
+                        # URL da imagem no GitHub (para o Render)
+                        img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url}"
+                        st.image(img_github, use_container_width=True)
+                else:
+                    ref = str(row.get("referencia", "")).replace(" ", "+")
+                    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
 
                 # Legendas
                 st.markdown(f"**{row.get('referencia', '')}**")
@@ -207,5 +206,4 @@ except Exception:
 
 # ---------- Rodapé ----------
 st.markdown("---")
-st.caption("Catálogo gerado localmente — Clami. Atualize o arquivo catalogo.csv para alterar o conteúdo.")
-
+st.caption("Catálogo gerado automaticamente — Clami. Atualize o arquivo catalogo.csv para alterar o conteúdo.")
