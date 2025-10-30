@@ -29,3 +29,4 @@ df.to_csv(CSV_SAIDA, index=False, encoding="utf-8")
 print(f"✅ CSV corrigido salvo como: {CSV_SAIDA}")
 print("Agora cada linha aponta para um caminho relativo tipo:")
 print("imagens/00095/NOME_DA_IMAGEM.jpg")
+
