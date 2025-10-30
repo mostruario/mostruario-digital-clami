@@ -6,23 +6,23 @@ from datetime import datetime
 import os
 import base64
 
-# ---------- Config ----------
+# ---------- CONFIGURAÇÕES ----------
 st.set_page_config(page_title="Mostruário Digital - CLAMI", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logos", "clami-positivo_.jpg")
 CSV_PATH = os.path.join(BASE_DIR, "catalogo.csv")
 
-# ---------- Helpers ----------
+# ---------- FUNÇÕES AUXILIARES ----------
 @st.cache_data(ttl=300)
 def load_data(path=CSV_PATH):
-    """Carrega o CSV, tenta UTF-8 e Latin-1."""
+    """Carrega o CSV (UTF-8 ou Latin-1)."""
     try:
         df = pd.read_csv(path, dtype=str, encoding="utf-8").fillna("")
     except UnicodeDecodeError:
         df = pd.read_csv(path, dtype=str, encoding="latin-1").fillna("")
     except Exception as e:
-        st.error(f"Erro ao ler {path}: {e}")
+        st.error(f"Erro ao ler o arquivo: {e}")
         df = pd.DataFrame(columns=[
             "codigo", "faixa", "referencia", "composicao",
             "status", "data_atualizacao", "imagem_url"
@@ -30,7 +30,7 @@ def load_data(path=CSV_PATH):
     return df
 
 def status_color(status_text):
-    """Define cor conforme o status."""
+    """Define cor do texto do status."""
     s = str(status_text).strip().lower()
     if "fora" in s:
         return "#D9534F"  # vermelho
@@ -38,10 +38,9 @@ def status_color(status_text):
         return "#F0AD4E"  # laranja
     if "ativo" in s:
         return "#5CB85C"  # verde
-    return "#6c757d"  # cinza
+    return "#6c757d"  # cinza neutro
 
-# ---------- Cabeçalho ----------
-logo_html = ""
+# ---------- CABEÇALHO ----------
 if os.path.exists(LOGO_PATH):
     try:
         with open(LOGO_PATH, "rb") as f:
@@ -49,7 +48,7 @@ if os.path.exists(LOGO_PATH):
         logo_b64 = base64.b64encode(logo_bytes).decode()
         logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="200" style="margin-bottom:5px;">'
     except Exception:
-        logo_html = ""
+        logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
 else:
     logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
 
@@ -64,7 +63,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ---------- Carregar dados ----------
+# ---------- CARREGAR DADOS ----------
 df = load_data(CSV_PATH)
 df.columns = [c.strip().lower() for c in df.columns]
 expected_cols = ["codigo", "faixa", "referencia", "composicao", "status", "data_atualizacao", "imagem_url"]
@@ -72,14 +71,12 @@ for c in expected_cols:
     if c not in df.columns:
         df[c] = ""
 
-# ---------- Filtros ----------
+# ---------- FILTROS ----------
 st.sidebar.header("Filtros")
 
-# --- Código (Fornecedor) ---
 codigos = ["Todos"] + sorted(df["codigo"].dropna().unique().tolist())
 codigo_sel = st.sidebar.selectbox("Código (fornecedor)", codigos)
 
-# --- Faixa (dependente do fornecedor) ---
 if codigo_sel and codigo_sel != "Todos":
     faixas_filtradas = sorted(df.loc[df["codigo"] == codigo_sel, "faixa"].dropna().unique().tolist())
 else:
@@ -87,11 +84,10 @@ else:
 
 faixa_sel = st.sidebar.multiselect("Faixa", options=faixas_filtradas, default=[], placeholder="Selecione as faixas")
 
-# --- Status ---
 status_opts = ["Todos"] + sorted(df["status"].dropna().unique().tolist())
 status_sel = st.sidebar.selectbox("Status", status_opts)
 
-# --- Última atualização ---
+# Última atualização
 ultima_data = None
 try:
     if codigo_sel and codigo_sel != "Todos":
@@ -110,48 +106,30 @@ if pd.notna(ultima_data):
 else:
     st.sidebar.markdown("🕓 **Última atualização:** -")
 
-# --- Busca ---
 q = st.sidebar.text_input("Busca livre (referência / composição)")
 
-# ---------- Aplicar filtros ----------
-filtered = pd.DataFrame()
-if (
-    (codigo_sel and codigo_sel != "Todos")
-    or faixa_sel
-    or (status_sel and status_sel != "Todos")
-    or (q and q.strip() != "")
-):
-    filtered = df.copy()
+# ---------- APLICAR FILTROS ----------
+filtered = df.copy()
 
-    if codigo_sel and codigo_sel != "Todos":
-        filtered = filtered[filtered["codigo"] == codigo_sel]
-
-    if faixa_sel:
-        filtered = filtered[filtered["faixa"].isin(faixa_sel)]
-
-    if status_sel and status_sel != "Todos":
-        filtered = filtered[filtered["status"] == status_sel]
-
-    if q:
-        qlow = q.lower()
-        mask = filtered.apply(
+if codigo_sel != "Todos":
+    filtered = filtered[filtered["codigo"] == codigo_sel]
+if faixa_sel:
+    filtered = filtered[filtered["faixa"].isin(faixa_sel)]
+if status_sel != "Todos":
+    filtered = filtered[filtered["status"] == status_sel]
+if q:
+    qlow = q.lower()
+    filtered = filtered[
+        filtered.apply(
             lambda r: qlow in str(r.get("referencia", "")).lower()
             or qlow in str(r.get("composicao", "")).lower(),
             axis=1,
         )
-        filtered = filtered[mask]
+    ]
 
-# ---------- Exibição ----------
+# ---------- EXIBIÇÃO ----------
 if filtered.empty:
-    if (
-        (codigo_sel and codigo_sel != "Todos")
-        or faixa_sel
-        or (status_sel and status_sel != "Todos")
-        or (q and q.strip() != "")
-    ):
-        st.info("Nenhum registro encontrado com os filtros selecionados.")
-    else:
-        st.info("Use os filtros ao lado para visualizar os produtos do mostruário.")
+    st.info("Nenhum registro encontrado com os filtros selecionados.")
 else:
     grouped = filtered.sort_values(["faixa", "referencia"]).groupby("faixa", sort=False)
     first = True
@@ -170,18 +148,13 @@ else:
             with col:
                 img_url = row.get("imagem_url", "")
                 if img_url:
-                    img_full_path = os.path.join(BASE_DIR, img_url.replace("/", os.sep))
-                    if os.path.exists(img_full_path):
-                        st.image(img_full_path, use_container_width=True)
-                    else:
-                        # URL da imagem no GitHub (para o Render)
-                        img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url}"
-                        st.image(img_github, use_container_width=True)
+                    # Caminho remoto (GitHub)
+                    img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
+                    st.image(img_github, use_container_width=True)
                 else:
                     ref = str(row.get("referencia", "")).replace(" ", "+")
                     st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
 
-                # Legendas
                 st.markdown(f"**{row.get('referencia', '')}**")
                 st.markdown(f"{row.get('composicao', '')}")
                 color = status_color(row.get('status', ''))
@@ -204,6 +177,6 @@ else:
             if i % imgs_per_row == 0 and i < len(group):
                 cols = st.columns(imgs_per_row)
 
-# ---------- Rodapé ----------
+# ---------- RODAPÉ ----------
 st.markdown("---")
-st.caption("Catálogo gerado automaticamente — Clami. Atualize o arquivo catalogo.csv para alterar o conteúdo.")
+st.caption("Catálogo online — Mostruário Digital CLAMI © 2025")
