@@ -1,16 +1,41 @@
-# Ignorar o ambiente virtual
-venv/
-__pycache__/
+# ======================================
+# GITIGNORE - MOSTRUÁRIO DIGITAL CLAMI
+# ======================================
 
-# Ignorar arquivos temporários
+# Arquivos temporários / cache do Python
+__pycache__/
 *.pyc
 *.pyo
-*.log
+*.pyd
+
+# Ambientes virtuais
+venv/
+env/
+.env
+
+# Arquivos CSV locais (somente os originais/testes)
+catalogo.csv
+catalogo_corrigido.csv
+catalogo_corrigido.csv.py
+catalogo_teste.csv
+*.bak
 *.tmp
 
-# Ignorar arquivos de sistema
+# Logs e relatórios
+*.log
+*.txt
+logs/
+
+# Configurações locais
 .DS_Store
 Thumbs.db
 
-# Ignorar cache do Streamlit
+# Arquivos gerados pelo Streamlit
 .streamlit/
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Pastas temporárias ou backups
+temp/
+backup/
+old/
