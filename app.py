@@ -1,17 +1,16 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-from datetime import datetime
 import os
 import base64
+from datetime import datetime
 
 # ---------- CONFIGURAÇÕES ----------
 st.set_page_config(page_title="Mostruário Digital - CLAMI", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logos", "clami-positivo_.jpg")
-CSV_PATH = os.path.join(BASE_DIR, "catalogo_corrigido.csv")  # ✅ usa o CSV atualizado
+CSV_PATH = os.path.join(BASE_DIR, "catalogo_corrigido.csv")  # usa o CSV atualizado
 
 # ---------- FUNÇÕES AUXILIARES ----------
 @st.cache_data(ttl=300)
@@ -76,43 +75,49 @@ for c in expected_cols:
 # ---------- FILTROS ----------
 st.sidebar.header("Filtros")
 
-# Filtro: Código (Fornecedor)
-codigos = ["Todos"] + sorted(df["codigo"].dropna().unique().tolist())
+codigos = ["Selecione um fornecedor"] + sorted(df["codigo"].dropna().unique().tolist())
 codigo_sel = st.sidebar.selectbox("Código (fornecedor)", codigos)
 
-# Filtro: Faixa (só aparece após escolher um código)
 faixa_sel = []
-if codigo_sel != "Todos":
+if codigo_sel != "Selecione um fornecedor":
     faixas_filtradas = sorted(df.loc[df["codigo"] == codigo_sel, "faixa"].dropna().unique().tolist())
-    faixa_sel = st.sidebar.multiselect(
-        "Faixa",
-        options=faixas_filtradas,
-        default=[],
-        placeholder="Selecione as faixas"
-    )
+    faixa_sel = st.sidebar.multiselect("Faixa", options=faixas_filtradas, default=[], placeholder="Selecione as faixas")
 
-# Filtro: Status
 status_opts = ["Todos"] + sorted(df["status"].dropna().unique().tolist())
 status_sel = st.sidebar.selectbox("Status", status_opts)
 
-# Filtro: Busca livre
 q = st.sidebar.text_input("Busca livre (referência / composição)")
 
-# ---------- INFORMAÇÕES DE ATUALIZAÇÃO ----------
+# ---------- INFORMAÇÕES DE ATUALIZAÇÃO AUTOMÁTICAS ----------
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🕓 Últimas Atualizações")
 
 try:
-    with open("atualizacoes.txt", "r", encoding="utf-8") as f:
-        atualizacoes = f.read()
-    st.sidebar.info(atualizacoes)
-except FileNotFoundError:
-    st.sidebar.warning("Nenhuma atualização registrada ainda.")
+    df["data_parsed"] = pd.to_datetime(df["data_atualizacao"], errors="coerce")
+    df_validas = df.dropna(subset=["data_parsed"]).copy()
+
+    if not df_validas.empty:
+        ultimas = (
+            df_validas.sort_values("data_parsed", ascending=False)
+            .head(5)[["data_parsed", "codigo", "faixa"]]
+            .drop_duplicates()
+        )
+
+        texto = ""
+        for _, row in ultimas.iterrows():
+            data_fmt = row["data_parsed"].strftime("%d/%m/%Y")
+            texto += f"📅 {data_fmt} — Fornecedor **{row['codigo']}** ({row['faixa']})\n\n"
+
+        st.sidebar.info(texto)
+    else:
+        st.sidebar.warning("Nenhuma atualização registrada ainda.")
+except Exception as e:
+    st.sidebar.error(f"Erro ao processar atualizações: {e}")
 
 # ---------- ÚLTIMA DATA DE ATUALIZAÇÃO ----------
 ultima_data = None
 try:
-    if codigo_sel and codigo_sel != "Todos":
+    if codigo_sel and codigo_sel != "Selecione um fornecedor":
         subset = df[df["codigo"] == codigo_sel].copy()
         subset["data_parsed"] = pd.to_datetime(subset["data_atualizacao"], errors="coerce")
         ultima_data = subset["data_parsed"].max()
@@ -128,75 +133,76 @@ if pd.notna(ultima_data):
 else:
     st.sidebar.markdown("📅 **Data mais recente:** -")
 
-# ---------- APLICAR FILTROS ----------
-filtered = df.copy()
-
-if codigo_sel != "Todos":
-    filtered = filtered[filtered["codigo"] == codigo_sel]
-if faixa_sel:
-    filtered = filtered[filtered["faixa"].isin(faixa_sel)]
-if status_sel != "Todos":
-    filtered = filtered[filtered["status"] == status_sel]
-if q:
-    qlow = q.lower()
-    filtered = filtered[
-        filtered.apply(
-            lambda r: qlow in str(r.get("referencia", "")).lower()
-            or qlow in str(r.get("composicao", "")).lower(),
-            axis=1,
-        )
-    ]
-
 # ---------- EXIBIÇÃO ----------
-if filtered.empty:
-    st.info("Nenhum registro encontrado com os filtros selecionados.")
+# Exibe apenas se o fornecedor for selecionado
+if codigo_sel == "Selecione um fornecedor":
+    st.info("👈 Escolha um **fornecedor** para visualizar o mostruário digital.")
 else:
-    grouped = filtered.sort_values(["faixa", "referencia"]).groupby("faixa", sort=False)
-    first = True
-    for faixa, group in grouped:
-        if not first:
-            st.markdown("<hr style='border:1px solid #ccc; margin:40px 0;'>", unsafe_allow_html=True)
-        first = False
+    filtered = df.copy()
+    filtered = filtered[filtered["codigo"] == codigo_sel]
 
-        st.markdown(f"<h3 style='margin-top:10px; color:#0b3d91;'>{faixa}</h3>", unsafe_allow_html=True)
+    if faixa_sel:
+        filtered = filtered[filtered["faixa"].isin(faixa_sel)]
+    if status_sel != "Todos":
+        filtered = filtered[filtered["status"] == status_sel]
+    if q:
+        qlow = q.lower()
+        filtered = filtered[
+            filtered.apply(
+                lambda r: qlow in str(r.get("referencia", "")).lower()
+                or qlow in str(r.get("composicao", "")).lower(),
+                axis=1,
+            )
+        ]
 
-        imgs_per_row = 5
-        cols = st.columns(imgs_per_row)
-        i = 0
-        for _, row in group.iterrows():
-            col = cols[i % imgs_per_row]
-            with col:
-                img_url = row.get("imagem_url", "")
-                if img_url:
-                    img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
-                    st.image(img_github, use_container_width=True)
-                else:
-                    ref = str(row.get("referencia", "")).replace(" ", "+")
-                    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
+    if filtered.empty:
+        st.info("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        grouped = filtered.sort_values(["faixa", "referencia"]).groupby("faixa", sort=False)
+        first = True
+        for faixa, group in grouped:
+            if not first:
+                st.markdown("<hr style='border:1px solid #ccc; margin:40px 0;'>", unsafe_allow_html=True)
+            first = False
 
-                st.markdown(f"**{row.get('referencia', '')}**")
-                st.markdown(f"{row.get('composicao', '')}")
-                color = status_color(row.get('status', ''))
-                st.markdown(
-                    f"""
-                    <div style='
-                        color:{color};
-                        font-weight:800;
-                        font-size:20px;
-                        text-align:left;
-                        margin-top:6px;
-                    '>
-                        {row.get('status', '')}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+            st.markdown(f"<h3 style='margin-top:10px; color:#0b3d91;'>{faixa}</h3>", unsafe_allow_html=True)
 
-            i += 1
-            if i % imgs_per_row == 0 and i < len(group):
-                cols = st.columns(imgs_per_row)
+            imgs_per_row = 5
+            cols = st.columns(imgs_per_row)
+            i = 0
+            for _, row in group.iterrows():
+                col = cols[i % imgs_per_row]
+                with col:
+                    img_url = row.get("imagem_url", "")
+                    if img_url:
+                        img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
+                        st.image(img_github, use_container_width=True)
+                    else:
+                        ref = str(row.get("referencia", "")).replace(" ", "+")
+                        st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
+
+                    st.markdown(f"**{row.get('referencia', '')}**")
+                    st.markdown(f"{row.get('composicao', '')}")
+                    color = status_color(row.get('status', ''))
+                    st.markdown(
+                        f"""
+                        <div style='
+                            color:{color};
+                            font-weight:800;
+                            font-size:20px;
+                            text-align:left;
+                            margin-top:6px;
+                        '>
+                            {row.get('status', '')}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                i += 1
+                if i % imgs_per_row == 0 and i < len(group):
+                    cols = st.columns(imgs_per_row)
 
 # ---------- RODAPÉ ----------
 st.markdown("---")
 st.caption("Catálogo online — Mostruário Digital CLAMI © 2025")
-
