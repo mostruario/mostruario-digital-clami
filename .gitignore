@@ -1,41 +1,12 @@
-# ======================================
-# GITIGNORE - MOSTRUÁRIO DIGITAL CLAMI
-# ======================================
-
-# Arquivos temporários / cache do Python
+# Ambiente virtual
+venv/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
 
-# Ambientes virtuais
-venv/
-env/
-.env
-
-# Arquivos CSV locais (somente os originais/testes)
-catalogo.csv
-catalogo_corrigido.csv
-catalogo_corrigido.csv.py
-catalogo_teste.csv
-*.bak
-*.tmp
-
-# Logs e relatórios
-*.log
-*.txt
-logs/
-
-# Configurações locais
+# Arquivos temporários
 .DS_Store
 Thumbs.db
 
-# Arquivos gerados pelo Streamlit
-.streamlit/
-.streamlit/secrets.toml
-.streamlit/config.toml
-
-# Pastas temporárias ou backups
-temp/
-backup/
-old/
+# Pastas locais de build
+python/
+logs/
