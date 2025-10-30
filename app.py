@@ -172,15 +172,15 @@ else:
             with col:
                 img_url = row.get("imagem_url", "")
                 if img_url:
-                    img_full_path = os.path.join(BASE_DIR, img_url.replace("/", os.sep))
-                    if os.path.exists(img_full_path):
-                        st.image(img_full_path, use_container_width=True)
-                    else:
-                        ref = str(row.get("referencia", "")).replace(" ", "+")
-                        st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
-                else:
-                    ref = str(row.get("referencia", "")).replace(" ", "+")
-                    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
+
+# Caminho da imagem hospedada no GitHub
+img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url}"
+
+try:
+    st.image(img_github, use_container_width=True)
+except Exception:
+    ref = str(row.get("referencia", "")).replace(" ", "+")
+    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
 
                 # Legendas
                 st.markdown(f"**{row.get('referencia', '')}**")
