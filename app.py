@@ -1,6 +1,8 @@
 # app.py
 import streamlit as st
 import pandas as pd
+from io import BytesIO
+from datetime import datetime
 import os
 import base64
 
@@ -8,75 +10,105 @@ import base64
 st.set_page_config(page_title="Mostruário Digital - CLAMI", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(BASE_DIR, "catalogo.csv")
 LOGO_PATH = os.path.join(BASE_DIR, "logos", "clami-positivo_.jpg")
+CSV_PATH = os.path.join(BASE_DIR, "catalogo.csv")
 
-# ---------- FUNÇÕES ----------
+# ---------- FUNÇÕES AUXILIARES ----------
 @st.cache_data(ttl=300)
 def load_data(path=CSV_PATH):
+    """Carrega o CSV (UTF-8 ou Latin-1)."""
     try:
         df = pd.read_csv(path, dtype=str, encoding="utf-8").fillna("")
     except UnicodeDecodeError:
         df = pd.read_csv(path, dtype=str, encoding="latin-1").fillna("")
+    except Exception as e:
+        st.error(f"Erro ao ler o arquivo: {e}")
+        df = pd.DataFrame(columns=[
+            "codigo", "faixa", "referencia", "composicao",
+            "status", "data_atualizacao", "imagem_url"
+        ])
     return df
 
 def status_color(status_text):
+    """Define cor do texto do status."""
     s = str(status_text).strip().lower()
     if "fora" in s:
-        return "#D9534F"
-    elif "susp" in s:
-        return "#F0AD4E"
-    elif "ativo" in s:
-        return "#5CB85C"
-    return "#6c757d"
+        return "#D9534F"  # vermelho
+    if "susp" in s:
+        return "#F0AD4E"  # laranja
+    if "ativo" in s:
+        return "#5CB85C"  # verde
+    return "#6c757d"  # cinza neutro
 
 # ---------- CABEÇALHO ----------
-logo_html = ""
 if os.path.exists(LOGO_PATH):
-    with open(LOGO_PATH, "rb") as f:
-        logo_bytes = f.read()
-    logo_b64 = base64.b64encode(logo_bytes).decode()
-    logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="200">'
+    try:
+        with open(LOGO_PATH, "rb") as f:
+            logo_bytes = f.read()
+        logo_b64 = base64.b64encode(logo_bytes).decode()
+        logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="200" style="margin-bottom:5px;">'
+    except Exception:
+        logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
 else:
     logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
 
 st.markdown(
     f"""
-    <div style="text-align:left;">
+    <div style="text-align:left; margin-left:0; margin-bottom:10px;">
         {logo_html}
-        <h1 style="color:#0b3d91;">MOSTRUÁRIO DIGITAL</h1>
+        <h1 style="color:#0b3d91; margin-top:5px; margin-bottom:10px;">MOSTRUÁRIO DIGITAL</h1>
     </div>
-    <hr style="border:1px solid #ccc; margin-bottom:25px;">
+    <hr style="border:1px solid #ccc; margin-top:0; margin-bottom:25px;">
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# ---------- DADOS ----------
-df = load_data()
+# ---------- CARREGAR DADOS ----------
+df = load_data(CSV_PATH)
 df.columns = [c.strip().lower() for c in df.columns]
-
 expected_cols = ["codigo", "faixa", "referencia", "composicao", "status", "data_atualizacao", "imagem_url"]
-for col in expected_cols:
-    if col not in df.columns:
-        df[col] = ""
+for c in expected_cols:
+    if c not in df.columns:
+        df[c] = ""
 
-# ---------- SIDEBAR ----------
+# ---------- FILTROS ----------
 st.sidebar.header("Filtros")
 
 codigos = ["Todos"] + sorted(df["codigo"].dropna().unique().tolist())
 codigo_sel = st.sidebar.selectbox("Código (fornecedor)", codigos)
 
-if codigo_sel != "Todos":
+if codigo_sel and codigo_sel != "Todos":
     faixas_filtradas = sorted(df.loc[df["codigo"] == codigo_sel, "faixa"].dropna().unique().tolist())
 else:
-    faixas_filtradas = sorted(df["faixa"].dropna().unique().tolist())
+    faixas_filtradas = sorted([f for f in df["faixa"].dropna().unique().tolist() if f])
 
-faixa_sel = st.sidebar.multiselect("Faixa", faixas_filtradas)
+faixa_sel = st.sidebar.multiselect("Faixa", options=faixas_filtradas, default=[], placeholder="Selecione as faixas")
+
 status_opts = ["Todos"] + sorted(df["status"].dropna().unique().tolist())
 status_sel = st.sidebar.selectbox("Status", status_opts)
-busca = st.sidebar.text_input("Busca livre (referência / composição)")
 
-# ---------- FILTROS ----------
+# Última atualização
+ultima_data = None
+try:
+    if codigo_sel and codigo_sel != "Todos":
+        subset = df[df["codigo"] == codigo_sel].copy()
+        subset["data_parsed"] = pd.to_datetime(subset["data_atualizacao"], errors="coerce")
+        ultima_data = subset["data_parsed"].max()
+    else:
+        df_tmp = df.copy()
+        df_tmp["data_parsed"] = pd.to_datetime(df_tmp["data_atualizacao"], errors="coerce")
+        ultima_data = df_tmp["data_parsed"].max()
+except Exception:
+    ultima_data = None
+
+if pd.notna(ultima_data):
+    st.sidebar.markdown(f"🕓 **Última atualização:** {ultima_data.strftime('%d/%m/%Y')}")
+else:
+    st.sidebar.markdown("🕓 **Última atualização:** -")
+
+q = st.sidebar.text_input("Busca livre (referência / composição)")
+
+# ---------- APLICAR FILTROS ----------
 filtered = df.copy()
 
 if codigo_sel != "Todos":
@@ -85,57 +117,66 @@ if faixa_sel:
     filtered = filtered[filtered["faixa"].isin(faixa_sel)]
 if status_sel != "Todos":
     filtered = filtered[filtered["status"] == status_sel]
-if busca:
-    busca_low = busca.lower()
+if q:
+    qlow = q.lower()
     filtered = filtered[
         filtered.apply(
-            lambda r: busca_low in str(r["referencia"]).lower()
-            or busca_low in str(r["composicao"]).lower(),
+            lambda r: qlow in str(r.get("referencia", "")).lower()
+            or qlow in str(r.get("composicao", "")).lower(),
             axis=1,
         )
     ]
 
 # ---------- EXIBIÇÃO ----------
 if filtered.empty:
-    st.info("Nenhum resultado encontrado com os filtros aplicados.")
+    st.info("Nenhum registro encontrado com os filtros selecionados.")
 else:
     grouped = filtered.sort_values(["faixa", "referencia"]).groupby("faixa", sort=False)
-
+    first = True
     for faixa, group in grouped:
-        st.markdown(f"<h3 style='color:#0b3d91;'>{faixa}</h3>", unsafe_allow_html=True)
-        cols = st.columns(5)
+        if not first:
+            st.markdown("<hr style='border:1px solid #ccc; margin:40px 0;'>", unsafe_allow_html=True)
+        first = False
+
+        st.markdown(f"<h3 style='margin-top:10px; color:#0b3d91;'>{faixa}</h3>", unsafe_allow_html=True)
+
+        imgs_per_row = 5
+        cols = st.columns(imgs_per_row)
         i = 0
         for _, row in group.iterrows():
-            col = cols[i % 5]
+            col = cols[i % imgs_per_row]
             with col:
-                img_url = str(row.get("imagem_url", "")).strip()
-                ref = str(row.get("referencia", "")).strip()
-
-                # 1️⃣ Caminho local
-                local_path = os.path.join(BASE_DIR, img_url.replace("/", os.sep))
-
-                # 2️⃣ Caminho online (GitHub)
-                github_url = (
-                    f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url}"
-                )
-
-                # 3️⃣ Exibição
-                if os.path.exists(local_path):
-                    st.image(local_path, use_container_width=True)
+                img_url = row.get("imagem_url", "")
+                if img_url:
+                    # Caminho remoto (GitHub)
+                    img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
+                    st.image(img_github, use_container_width=True)
                 else:
-                    st.image(github_url, use_container_width=True)
+                    ref = str(row.get("referencia", "")).replace(" ", "+")
+                    st.image(f"https://placehold.co/400x300?text={ref}", use_container_width=True)
 
-                # Texto
-                st.markdown(f"**{ref}**")
+                st.markdown(f"**{row.get('referencia', '')}**")
                 st.markdown(f"{row.get('composicao', '')}")
-                color = status_color(row.get("status", ""))
+                color = status_color(row.get('status', ''))
                 st.markdown(
-                    f"<div style='color:{color}; font-weight:800; font-size:20px;'>{row.get('status', '')}</div>",
-                    unsafe_allow_html=True,
+                    f"""
+                    <div style='
+                        color:{color};
+                        font-weight:800;
+                        font-size:20px;
+                        text-align:left;
+                        margin-top:6px;
+                    '>
+                        {row.get('status', '')}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
-            i += 1
-            if i % 5 == 0:
-                cols = st.columns(5)
 
+            i += 1
+            if i % imgs_per_row == 0 and i < len(group):
+                cols = st.columns(imgs_per_row)
+
+# ---------- RODAPÉ ----------
 st.markdown("---")
-st.caption("Catálogo CLAMI — atualizado automaticamente via GitHub.")
+st.caption("Catálogo online — Mostruário Digital CLAMI © 2025")
