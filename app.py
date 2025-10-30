@@ -76,20 +76,40 @@ for c in expected_cols:
 # ---------- FILTROS ----------
 st.sidebar.header("Filtros")
 
+# Filtro: Código (Fornecedor)
 codigos = ["Todos"] + sorted(df["codigo"].dropna().unique().tolist())
 codigo_sel = st.sidebar.selectbox("Código (fornecedor)", codigos)
 
-if codigo_sel and codigo_sel != "Todos":
+# Filtro: Faixa (só aparece após escolher um código)
+faixa_sel = []
+if codigo_sel != "Todos":
     faixas_filtradas = sorted(df.loc[df["codigo"] == codigo_sel, "faixa"].dropna().unique().tolist())
-else:
-    faixas_filtradas = sorted([f for f in df["faixa"].dropna().unique().tolist() if f])
+    faixa_sel = st.sidebar.multiselect(
+        "Faixa",
+        options=faixas_filtradas,
+        default=[],
+        placeholder="Selecione as faixas"
+    )
 
-faixa_sel = st.sidebar.multiselect("Faixa", options=faixas_filtradas, default=[], placeholder="Selecione as faixas")
-
+# Filtro: Status
 status_opts = ["Todos"] + sorted(df["status"].dropna().unique().tolist())
 status_sel = st.sidebar.selectbox("Status", status_opts)
 
-# Última atualização
+# Filtro: Busca livre
+q = st.sidebar.text_input("Busca livre (referência / composição)")
+
+# ---------- INFORMAÇÕES DE ATUALIZAÇÃO ----------
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🕓 Últimas Atualizações")
+
+try:
+    with open("atualizacoes.txt", "r", encoding="utf-8") as f:
+        atualizacoes = f.read()
+    st.sidebar.info(atualizacoes)
+except FileNotFoundError:
+    st.sidebar.warning("Nenhuma atualização registrada ainda.")
+
+# ---------- ÚLTIMA DATA DE ATUALIZAÇÃO ----------
 ultima_data = None
 try:
     if codigo_sel and codigo_sel != "Todos":
@@ -104,11 +124,9 @@ except Exception:
     ultima_data = None
 
 if pd.notna(ultima_data):
-    st.sidebar.markdown(f"🕓 **Última atualização:** {ultima_data.strftime('%d/%m/%Y')}")
+    st.sidebar.markdown(f"📅 **Data mais recente:** {ultima_data.strftime('%d/%m/%Y')}")
 else:
-    st.sidebar.markdown("🕓 **Última atualização:** -")
-
-q = st.sidebar.text_input("Busca livre (referência / composição)")
+    st.sidebar.markdown("📅 **Data mais recente:** -")
 
 # ---------- APLICAR FILTROS ----------
 filtered = df.copy()
@@ -150,7 +168,6 @@ else:
             with col:
                 img_url = row.get("imagem_url", "")
                 if img_url:
-                    # Caminho remoto no GitHub
                     img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
                     st.image(img_github, use_container_width=True)
                 else:
