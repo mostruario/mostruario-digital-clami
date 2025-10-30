@@ -11,7 +11,7 @@ st.set_page_config(page_title="Mostruário Digital - CLAMI", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logos", "clami-positivo_.jpg")
-CSV_PATH = os.path.join(BASE_DIR, "catalogo.csv")
+CSV_PATH = os.path.join(BASE_DIR, "catalogo_corrigido.csv")  # ✅ usa o CSV atualizado
 
 # ---------- FUNÇÕES AUXILIARES ----------
 @st.cache_data(ttl=300)
@@ -29,6 +29,7 @@ def load_data(path=CSV_PATH):
         ])
     return df
 
+
 def status_color(status_text):
     """Define cor do texto do status."""
     s = str(status_text).strip().lower()
@@ -40,6 +41,7 @@ def status_color(status_text):
         return "#5CB85C"  # verde
     return "#6c757d"  # cinza neutro
 
+
 # ---------- CABEÇALHO ----------
 if os.path.exists(LOGO_PATH):
     try:
@@ -48,9 +50,9 @@ if os.path.exists(LOGO_PATH):
         logo_b64 = base64.b64encode(logo_bytes).decode()
         logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="200" style="margin-bottom:5px;">'
     except Exception:
-        logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
+        logo_html = "<div style='font-weight:700; font-size:28px;'>CLAMI</div>"
 else:
-    logo_html = "<div style='font-weight:700; font-size:28px;'>clami</div>"
+    logo_html = "<div style='font-weight:700; font-size:28px;'>CLAMI</div>"
 
 st.markdown(
     f"""
@@ -148,7 +150,7 @@ else:
             with col:
                 img_url = row.get("imagem_url", "")
                 if img_url:
-                    # Caminho remoto (GitHub)
+                    # Caminho remoto no GitHub
                     img_github = f"https://raw.githubusercontent.com/mostruario/mostruario-digital-clami/main/{img_url.replace(' ', '%20')}"
                     st.image(img_github, use_container_width=True)
                 else:
@@ -180,3 +182,4 @@ else:
 # ---------- RODAPÉ ----------
 st.markdown("---")
 st.caption("Catálogo online — Mostruário Digital CLAMI © 2025")
+
